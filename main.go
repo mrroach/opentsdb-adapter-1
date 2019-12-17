@@ -27,6 +27,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/model"
 
 	"github.com/caitong93/opentsdb-adapter/opentsdb"
@@ -41,6 +42,7 @@ type config struct {
 	remoteTimeout time.Duration
 	listenAddr    string
 	telemetryPath string
+	promlogConfig promlog.Config
 }
 
 var (
@@ -83,12 +85,9 @@ func init() {
 
 func main() {
 	cfg := parseFlags()
-	http.Handle(cfg.telemetryPath, prometheus.Handler())
+	http.Handle(cfg.telemetryPath, promhttp.Handler())
 
-	logLevel := promlog.AllowedLevel{}
-	logLevel.Set("debug")
-
-	logger := promlog.New(logLevel)
+	logger := promlog.New(&cfg.promlogConfig)
 
 	writers, readers := buildClients(logger, cfg)
 	serve(logger, cfg.listenAddr, writers, readers)
