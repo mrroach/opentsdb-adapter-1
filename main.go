@@ -14,11 +14,11 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"sync"
 	"time"
 
@@ -26,15 +26,18 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promlog/flag"
+	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/caitong93/opentsdb-adapter/opentsdb"
 	"github.com/caitong93/opentsdb-adapter/prompb"
 	_ "github.com/grpc-ecosystem/grpc-gateway/runtime"
 	_ "github.com/grpc-ecosystem/grpc-gateway/utilities"
-	"github.com/prometheus/common/promlog"
 )
 
 type config struct {
@@ -94,17 +97,20 @@ func main() {
 }
 
 func parseFlags() *config {
+	a := kingpin.New("adaptor", "opentsdb adaptor")
 	cfg := &config{}
-	flag.StringVar(&cfg.opentsdbURL, "opentsdb-url", "",
-		"The URL of the remote OpenTSDB server to send samples to. None, if empty.",
-	)
-	flag.DurationVar(&cfg.remoteTimeout, "send-timeout", 30*time.Second,
-		"The timeout to use when sending samples to the remote storage.",
-	)
-	flag.StringVar(&cfg.listenAddr, "web.listen-address", ":9201", "Address to listen on for web endpoints.")
-	flag.StringVar(&cfg.telemetryPath, "web.telemetry-path", "/metrics", "Address to listen on for web endpoints.")
+	a.Flag("opentsdb-url", "The URL of the remote OpenTSDB server to send samples to. None, if empty.").Default("").StringVar(&cfg.opentsdbURL)
+	a.Flag("send-timeout", "The timeout to use when sending samples to the remote storage.").Default("30s").DurationVar(&cfg.remoteTimeout)
+	a.Flag("web.listen-address", "Address to listen on for web endpoints.").Default(":9201").StringVar(&cfg.listenAddr)
+	a.Flag("web.telemetry-path", "Address to listen on for web endpoints.").Default("/metrics").StringVar(&cfg.telemetryPath)
 
-	flag.Parse()
+	flag.AddFlags(a, &cfg.promlogConfig)
+	_, err := a.Parse(os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, errors.Wrapf(err, "Error parsing commandline arguments"))
+		a.Usage(os.Args[1:])
+		os.Exit(2)
+	}
 
 	return cfg
 }
